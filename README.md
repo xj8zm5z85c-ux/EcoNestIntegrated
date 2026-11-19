@@ -157,7 +157,9 @@ Older CSV and serialized data files are left untouched and are **not automatical
 | Order rejected for insufficient inventory | Refresh the module from the launcher and check current on-hand stock in Inventory; the database prevents overselling. |
 | Product cannot be removed | Deplete its stock and finish or cancel its open orders first; inactive products are hidden from new orders while history is retained. |
 
-SMTP credentials are entered at runtime and are not stored in the database. For Gmail, use an App Password. Never commit or share the password.
+SMTP credentials are entered at runtime and are not stored in the database. For Gmail, use `smtp.gmail.com` on port `587`, enter a Google **App Password** (not the normal account password), and use the same Gmail address for **From email** and **SMTP username**. Never commit or share the password.
+
+For a dispatch notification, enter an order ID whose status is **DISPATCHED**. For an assignment notification, enter an order ID with a delivery agent assigned. The destination email, recipient name, and (for assignments) delivery address are read from the matching database records; they are not manually supplied, which prevents sending a notification to an address unrelated to the order. Demo records use reserved `example.com` addresses and cannot receive real email; use an order linked to a client/agent with a real email address when testing delivery.
 
 ## Included modules
 

@@ -11,14 +11,16 @@ import lk.econest.db.DatabaseException;
 
 /** Persists email attempts against their corresponding order or delivery. */
 public final class Tasks89NotificationRepository {
-    public long beginDispatchNotification(String orderCode, String clientName, String recipient)
-            throws IOException {
-        return createNotification(orderCode, clientName, recipient, null, true);
+    public record NotificationTarget(long notificationId, String contactName,
+            String recipientEmail, String deliveryAddress) {
     }
 
-    public long beginAssignmentNotification(String orderCode, String agentName, String recipient,
-            String deliveryAddress) throws IOException {
-        return createNotification(orderCode, agentName, recipient, deliveryAddress, false);
+    public NotificationTarget beginDispatchNotification(String orderCode) throws IOException {
+        return createNotification(orderCode, true);
+    }
+
+    public NotificationTarget beginAssignmentNotification(String orderCode) throws IOException {
+        return createNotification(orderCode, false);
     }
 
     public void markSent(long notificationId) throws IOException {
@@ -29,34 +31,35 @@ public final class Tasks89NotificationRepository {
         updateStatus(notificationId, "FAILED", failure);
     }
 
-    private long createNotification(String orderCode, String contactName, String recipient,
-            String deliveryAddress, boolean dispatch)
-            throws IOException {
+    private NotificationTarget createNotification(String orderCode, boolean dispatch) throws IOException {
         String targetSql = dispatch
-                ? "SELECT o.order_id FROM orders o JOIN clients c ON c.client_id = o.client_id "
-                        + "WHERE o.order_code = ? AND o.order_status = 'DISPATCHED' "
-                        + "AND LOWER(c.client_name) = LOWER(?) AND LOWER(c.email) = LOWER(?)"
-                : "SELECT d.delivery_id FROM deliveries d "
+                ? "SELECT o.order_id AS target_id, c.client_name AS contact_name, "
+                        + "c.email AS recipient_email, NULL AS delivery_address "
+                        + "FROM orders o JOIN clients c ON c.client_id = o.client_id "
+                        + "WHERE o.order_code = ? AND o.order_status = 'DISPATCHED'"
+                : "SELECT d.delivery_id AS target_id, a.full_name AS contact_name, "
+                        + "a.email AS recipient_email, d.delivery_address "
+                        + "FROM deliveries d "
                         + "JOIN orders o ON o.order_id = d.order_id "
                         + "JOIN delivery_agents a ON a.agent_id = d.agent_id "
-                        + "WHERE o.order_code = ? AND LOWER(a.full_name) = LOWER(?) "
-                        + "AND LOWER(a.email) = LOWER(?) AND d.delivery_address = ?";
+                        + "WHERE o.order_code = ?";
         try (Connection connection = Database.openConnection()) {
             long targetId;
+            String contactName;
+            String recipient;
+            String deliveryAddress;
             try (PreparedStatement statement = connection.prepareStatement(targetSql)) {
                 statement.setString(1, orderCode);
-                statement.setString(2, contactName);
-                statement.setString(3, recipient);
-                if (!dispatch) {
-                    statement.setString(4, deliveryAddress);
-                }
                 try (ResultSet row = statement.executeQuery()) {
                     if (!row.next()) {
                         throw new IOException(dispatch
-                                ? "No dispatched order was found with ID " + orderCode + "."
-                                : "No delivery was found for order " + orderCode + ".");
+                                ? "Order " + orderCode + " was not found or is not in DISPATCHED status."
+                                : "Order " + orderCode + " was not found or has no assigned delivery agent.");
                     }
-                    targetId = row.getLong(1);
+                    targetId = row.getLong("target_id");
+                    contactName = row.getString("contact_name");
+                    recipient = row.getString("recipient_email");
+                    deliveryAddress = row.getString("delivery_address");
                 }
             }
             String insertSql = dispatch
@@ -71,7 +74,8 @@ public final class Tasks89NotificationRepository {
                 statement.executeUpdate();
                 try (ResultSet keys = statement.getGeneratedKeys()) {
                     if (keys.next()) {
-                        return keys.getLong(1);
+                        return new NotificationTarget(keys.getLong(1), contactName,
+                                recipient, deliveryAddress);
                     }
                 }
             }
