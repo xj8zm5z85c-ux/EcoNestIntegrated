@@ -6,7 +6,6 @@ import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
@@ -24,14 +23,14 @@ import javax.swing.table.TableRowSorter;
 
 /** Product catalogue screen for EcoNest. */
 public final class Task1ProductCatalogFrame extends JFrame {
-    private final Task1CsvProductRepository repository;
+    private final Task1ProductRepository repository;
     private final Task1ProductTableModel tableModel = new Task1ProductTableModel();
     private final JTable table = new JTable(tableModel);
     private final JTextField searchField = new JTextField(24);
     private final JLabel status = new JLabel(" ");
     private final TableRowSorter<Task1ProductTableModel> sorter = new TableRowSorter<>(tableModel);
 
-    public Task1ProductCatalogFrame(Task1CsvProductRepository repository) {
+    public Task1ProductCatalogFrame(Task1ProductRepository repository) {
         super("EcoNest | Product Catalogue");
         this.repository = repository;
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -101,8 +100,8 @@ public final class Task1ProductCatalogFrame extends JFrame {
             updateStatus();
         } catch (IOException ex) {
             JOptionPane.showMessageDialog(this,
-                    "The saved catalogue could not be loaded.\n" + ex.getMessage(),
-                    "Catalogue file error", JOptionPane.ERROR_MESSAGE);
+                    "The shared catalogue could not be loaded.\n" + ex.getMessage(),
+                    "Database error", JOptionPane.ERROR_MESSAGE);
             status.setText("Catalogue could not be loaded.");
         }
     }
@@ -112,14 +111,12 @@ public final class Task1ProductCatalogFrame extends JFrame {
         dialog.setVisible(true);
         Task1Product product = dialog.getResult();
         if (product == null) return;
-        List<Task1Product> products = tableModel.getProducts();
-        if (findSku(products, product.getSku()) >= 0) {
+        if (findSku(tableModel.getProducts(), product.getSku()) >= 0) {
             JOptionPane.showMessageDialog(this, "A product with this SKU already exists.",
                     "Duplicate SKU", JOptionPane.WARNING_MESSAGE);
             return;
         }
-        products.add(product);
-        saveProducts(products);
+        saveProduct(product);
     }
 
     private void editProduct() {
@@ -130,9 +127,7 @@ public final class Task1ProductCatalogFrame extends JFrame {
         dialog.setVisible(true);
         Task1Product updated = dialog.getResult();
         if (updated == null) return;
-        List<Task1Product> products = tableModel.getProducts();
-        products.set(row, updated);
-        saveProducts(products);
+        saveProduct(updated);
     }
 
     private void removeProduct() {
@@ -143,9 +138,12 @@ public final class Task1ProductCatalogFrame extends JFrame {
                 "Remove “" + product.getName() + "” (" + product.getSku() + ") from the catalogue?",
                 "Confirm removal", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
         if (choice != JOptionPane.YES_OPTION) return;
-        List<Task1Product> products = tableModel.getProducts();
-        products.remove(row);
-        saveProducts(products);
+        try {
+            repository.deactivateProduct(product.getSku());
+            loadProducts();
+        } catch (IOException ex) {
+            showSaveError(ex);
+        }
     }
 
     private int selectedModelRow() {
@@ -165,20 +163,23 @@ public final class Task1ProductCatalogFrame extends JFrame {
         return -1;
     }
 
-    private void saveProducts(List<Task1Product> products) {
+    private void saveProduct(Task1Product product) {
         try {
-            repository.save(products);
-            tableModel.setProducts(new ArrayList<>(products));
-            updateStatus();
+            repository.saveProduct(product);
+            loadProducts();
         } catch (IOException ex) {
-            JOptionPane.showMessageDialog(this, "Changes could not be saved.\n" + ex.getMessage(),
-                    "Save error", JOptionPane.ERROR_MESSAGE);
+            showSaveError(ex);
         }
+    }
+
+    private void showSaveError(IOException exception) {
+        JOptionPane.showMessageDialog(this, "Changes could not be saved.\n" + exception.getMessage(),
+                "Database error", JOptionPane.ERROR_MESSAGE);
     }
 
     private void updateStatus() {
         int count = tableModel.getRowCount();
         status.setText(count + (count == 1 ? " product in catalogue" : " products in catalogue")
-                + "   •   Saved on this computer");
+                + "   •   Shared database");
     }
 }

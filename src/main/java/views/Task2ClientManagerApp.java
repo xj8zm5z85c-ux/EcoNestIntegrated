@@ -6,6 +6,7 @@ import java.awt.GridLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.util.ArrayList;
+import java.io.IOException;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
@@ -22,6 +23,7 @@ import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 import javax.swing.table.DefaultTableModel;
 import model.Task2Client;
+import lk.econest.db.ClientRepository;
 
 /** Task 2 UI - manages household and office client details. */
 public class Task2ClientManagerApp extends JFrame {
@@ -32,17 +34,34 @@ public class Task2ClientManagerApp extends JFrame {
     private JTextField txtEmail = new JTextField();
     private JTextArea txtAddress = new JTextArea(3, 20);
     private ArrayList<Task2Client> clientList = new ArrayList<Task2Client>();
+    private final ClientRepository repository;
     private DefaultTableModel tableModel = new DefaultTableModel(new String[]{"ID", "Name", "Type", "Phone", "Email", "Address"}, 0) {
         public boolean isCellEditable(int row, int column) { return false; }
     };
     private JTable clientTable = new JTable(tableModel);
 
     public Task2ClientManagerApp() {
+        this(new ClientRepository());
+    }
+
+    public Task2ClientManagerApp(ClientRepository repository) {
         setTitle("EcoNest Client Management");
+        this.repository = repository;
         setSize(900, 580);
         setLocationRelativeTo(null);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         buildInterface();
+        loadClients();
+    }
+
+    private void loadClients() {
+        try {
+            clientList = new ArrayList<>(repository.loadAll());
+            refreshTable();
+        } catch (IOException exception) {
+            JOptionPane.showMessageDialog(this, "Clients could not be loaded.\n" + exception.getMessage(),
+                    "Database error", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     private void buildInterface() {
@@ -100,7 +119,15 @@ public class Task2ClientManagerApp extends JFrame {
     private void addClient() {
         if (!validInput()) return;
         if (findClient(txtId.getText().trim()) != -1) { JOptionPane.showMessageDialog(this, "This client ID already exists."); return; }
-        clientList.add(getFormClient()); refreshTable(); clearForm(); JOptionPane.showMessageDialog(this, "Client added.");
+        Task2Client client = getFormClient();
+        try {
+            repository.insert(client);
+            clientList.add(client); refreshTable(); clearForm();
+            JOptionPane.showMessageDialog(this, "Client added.");
+        } catch (IOException exception) {
+            JOptionPane.showMessageDialog(this, "Client could not be added.\n" + exception.getMessage(),
+                    "Database error", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     private void updateClient() {
@@ -108,13 +135,27 @@ public class Task2ClientManagerApp extends JFrame {
         int index = findClient(txtId.getText().trim());
         if (index == -1) { JOptionPane.showMessageDialog(this, "Select a client from the table to update."); return; }
         Task2Client client = getFormClient();
-        clientList.set(index, client); refreshTable(); clearForm(); JOptionPane.showMessageDialog(this, "Client updated.");
+        try {
+            repository.update(client);
+            clientList.set(index, client); refreshTable(); clearForm();
+            JOptionPane.showMessageDialog(this, "Client updated.");
+        } catch (IOException exception) {
+            JOptionPane.showMessageDialog(this, "Client could not be updated.\n" + exception.getMessage(),
+                    "Database error", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     private void deleteClient() {
         int row = clientTable.getSelectedRow();
         if (row == -1) { JOptionPane.showMessageDialog(this, "Select a client from the table first."); return; }
-        clientList.remove(row); refreshTable(); clearForm(); JOptionPane.showMessageDialog(this, "Client deleted.");
+        try {
+            repository.delete(clientList.get(row).getClientId());
+            clientList.remove(row); refreshTable(); clearForm();
+            JOptionPane.showMessageDialog(this, "Client deleted.");
+        } catch (IOException exception) {
+            JOptionPane.showMessageDialog(this, "Client could not be deleted.\n" + exception.getMessage(),
+                    "Database error", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     private void showSelectedClient() {

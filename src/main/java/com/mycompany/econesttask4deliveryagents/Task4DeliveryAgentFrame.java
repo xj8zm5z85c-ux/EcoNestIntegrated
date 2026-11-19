@@ -42,7 +42,7 @@ public class Task4DeliveryAgentFrame extends javax.swing.JFrame {
 
         add(topPanel, BorderLayout.NORTH);
         add(new JScrollPane(agentTable), BorderLayout.CENTER);
-        add(new JLabel("Delivery-agent records are saved locally in your .econest folder."),
+        add(new JLabel("Delivery agents are shared with the order and delivery workflow."),
                 BorderLayout.SOUTH);
         refreshTable();
     }

@@ -8,6 +8,7 @@ import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -112,7 +113,7 @@ public class Tasks56EcoNestApp extends JFrame {
         JScrollPane cartScroll = new JScrollPane(cartTable); cartScroll.setPreferredSize(new Dimension(400, 155));
         create.add(cartScroll, BorderLayout.CENTER);
         JPanel cartFooter = new JPanel(new BorderLayout()); cartFooter.setOpaque(false);
-        totalLabel = new JLabel("Order total: " + formatMoney(0));
+        totalLabel = new JLabel("Order total: " + formatMoney(BigDecimal.ZERO));
         totalLabel.setFont(new Font("SansSerif", Font.BOLD, 17)); totalLabel.setForeground(FOREST);
         JButton removeItem = secondaryButton("Remove selected item");
         removeItem.addActionListener(e -> removeCartItem(cartTable.getSelectedRow()));
@@ -192,10 +193,13 @@ public class Tasks56EcoNestApp extends JFrame {
 
     private void refreshCart() {
         cartModel.setRowCount(0);
-        double total = 0;
+        BigDecimal total = BigDecimal.ZERO;
         for (Map.Entry<Tasks56Product, Integer> entry : cart.entrySet()) {
-            double line = entry.getKey().getPrice() * entry.getValue(); total += line;
-            cartModel.addRow(new Object[]{entry.getKey().getName(), formatMoney(entry.getKey().getPrice()), entry.getValue(), formatMoney(line)});
+            BigDecimal line = entry.getKey().getPriceAmount()
+                    .multiply(BigDecimal.valueOf(entry.getValue()));
+            total = total.add(line);
+            cartModel.addRow(new Object[]{entry.getKey().getName(),
+                    formatMoney(entry.getKey().getPriceAmount()), entry.getValue(), formatMoney(line)});
         }
         totalLabel.setText("Order total: " + formatMoney(total));
     }
@@ -210,15 +214,16 @@ public class Tasks56EcoNestApp extends JFrame {
         List<Tasks56OrderItem> items = new ArrayList<Tasks56OrderItem>();
         for (Map.Entry<Tasks56Product, Integer> entry : cart.entrySet()) {
             items.add(new Tasks56OrderItem(entry.getKey(), entry.getValue()));
-            entry.getKey().reduceStock(entry.getValue());
         }
-        String id = String.format("ORD-%04d", store.getOrders().size() + 1);
+        String id = "ORD-" + java.util.UUID.randomUUID().toString()
+                .substring(0, 8).toUpperCase(java.util.Locale.ROOT);
         Tasks56ClientOrder order = new Tasks56ClientOrder(id, client, items);
         store.getOrders().add(order);
         try { store.save(); }
         catch (IllegalStateException ex) { showError(ex.getMessage()); return; }
         cart.clear(); refreshCart(); refreshOrders(); refreshDeliveries(); refreshProductChoices();
-        JOptionPane.showMessageDialog(this, "Order " + id + " has been placed.\nTotal: " + formatMoney(order.getTotal()), "Order placed", JOptionPane.INFORMATION_MESSAGE);
+        JOptionPane.showMessageDialog(this, "Order " + id + " has been placed.\nTotal: "
+                + formatMoney(order.getTotalAmount()), "Order placed", JOptionPane.INFORMATION_MESSAGE);
     }
 
     private void assignDelivery() {
@@ -259,8 +264,8 @@ public class Tasks56EcoNestApp extends JFrame {
         String id = String.valueOf(ordersModel.getValueAt(row, 0));
         for (Tasks56ClientOrder order : store.getOrders()) if (order.getId().equals(id)) {
             StringBuilder details = new StringBuilder("Order ").append(order.getId()).append("\nClient: ").append(order.getClient().getName()).append("\nCreated: ").append(order.getCreatedDate()).append("\n\nItems:\n");
-            for (Tasks56OrderItem item : order.getItems()) details.append("• ").append(item.getProductName()).append("  × ").append(item.getQuantity()).append("  —  ").append(formatMoney(item.getLineTotal())).append("\n");
-            details.append("\nOrder total: ").append(formatMoney(order.getTotal()));
+            for (Tasks56OrderItem item : order.getItems()) details.append("• ").append(item.getProductName()).append("  × ").append(item.getQuantity()).append("  —  ").append(formatMoney(item.getLineTotalAmount())).append("\n");
+            details.append("\nOrder total: ").append(formatMoney(order.getTotalAmount()));
             if (order.getDeliveryAgent() != null) details.append("\nDelivery: ").append(order.getDeliveryAgent().getName()).append(" on ").append(order.getDeliveryDate()).append(" ( ").append(order.getDeliveryStatus()).append(" )");
             JOptionPane.showMessageDialog(this, details.toString(), "Order details", JOptionPane.INFORMATION_MESSAGE); return;
         }
@@ -271,7 +276,7 @@ public class Tasks56EcoNestApp extends JFrame {
         ordersModel.setRowCount(0);
         for (int i = store.getOrders().size() - 1; i >= 0; i--) {
             Tasks56ClientOrder order = store.getOrders().get(i);
-            ordersModel.addRow(new Object[]{order.getId(), order.getCreatedDate().format(DATE_FORMAT), order.getClient().getName(), order.getItems().size(), formatMoney(order.getTotal()), order.getDeliveryStatus()});
+            ordersModel.addRow(new Object[]{order.getId(), order.getCreatedDate().format(DATE_FORMAT), order.getClient().getName(), order.getItems().size(), formatMoney(order.getTotalAmount()), order.getDeliveryStatus()});
         }
     }
 
@@ -287,9 +292,14 @@ public class Tasks56EcoNestApp extends JFrame {
 
     private void refreshProductChoices() {
         Tasks56Product selected = (Tasks56Product) productBox.getSelectedItem();
+        String selectedId = selected == null ? null : selected.getId();
         productBox.removeAllItems();
-        for (Tasks56Product product : store.getProducts()) productBox.addItem(product);
-        if (selected != null) productBox.setSelectedItem(selected);
+        for (Tasks56Product product : store.getProducts()) {
+            productBox.addItem(product);
+            if (product.getId().equals(selectedId)) {
+                productBox.setSelectedItem(product);
+            }
+        }
     }
 
     private JPanel pagePanel() {
@@ -328,7 +338,10 @@ public class Tasks56EcoNestApp extends JFrame {
         JTable table = new JTable(model); table.setRowHeight(29); table.setFont(new Font("SansSerif", Font.PLAIN, 12));
         table.getTableHeader().setFont(new Font("SansSerif", Font.BOLD, 12)); table.getTableHeader().setBackground(new Color(231, 241, 233)); table.setSelectionMode(javax.swing.ListSelectionModel.SINGLE_SELECTION); return table;
     }
-    private String formatMoney(double value) { return "LKR " + String.format("%,.2f", value); }
+    private String formatMoney(BigDecimal value) {
+        return "LKR " + String.format("%,.2f",
+                value.setScale(2, java.math.RoundingMode.HALF_UP));
+    }
     private void showError(String message) { JOptionPane.showMessageDialog(this, message, "Please check", JOptionPane.WARNING_MESSAGE); }
 
     public static void main(String[] args) {

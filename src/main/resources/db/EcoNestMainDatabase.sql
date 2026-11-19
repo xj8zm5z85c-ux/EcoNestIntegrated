@@ -20,11 +20,13 @@ CREATE TABLE IF NOT EXISTS products (
     updated_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (product_id),
     UNIQUE KEY uq_products_product_code (product_code),
-    CONSTRAINT chk_products_unit_price CHECK (unit_price >= 0)
+    CONSTRAINT chk_products_unit_price CHECK (unit_price >= 0),
+    CONSTRAINT chk_products_eco_rating CHECK (eco_rating IS NULL OR eco_rating BETWEEN 1 AND 5)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS clients (
     client_id           INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    client_code         VARCHAR(30) NOT NULL,
     client_type         ENUM('HOUSEHOLD', 'OFFICE') NOT NULL,
     client_name         VARCHAR(150) NOT NULL,
     contact_person      VARCHAR(120) NULL,
@@ -36,6 +38,7 @@ CREATE TABLE IF NOT EXISTS clients (
     created_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (client_id),
+    UNIQUE KEY uq_clients_client_code (client_code),
     KEY ix_clients_email (email),
     KEY ix_clients_name (client_name)
 ) ENGINE=InnoDB;
@@ -56,6 +59,7 @@ CREATE TABLE IF NOT EXISTS suppliers (
 
 CREATE TABLE IF NOT EXISTS delivery_agents (
     agent_id                    INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    agent_code                  VARCHAR(30) NOT NULL,
     full_name                   VARCHAR(150) NOT NULL,
     phone                       VARCHAR(30) NOT NULL,
     email                       VARCHAR(254) NOT NULL,
@@ -66,6 +70,7 @@ CREATE TABLE IF NOT EXISTS delivery_agents (
     created_at                  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at                  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (agent_id),
+    UNIQUE KEY uq_delivery_agents_agent_code (agent_code),
     UNIQUE KEY uq_delivery_agents_vehicle_registration (vehicle_registration_no),
     KEY ix_delivery_agents_name (full_name),
     KEY ix_delivery_agents_active (is_active)
@@ -137,6 +142,7 @@ CREATE TABLE IF NOT EXISTS stock_in_items (
 
 CREATE TABLE IF NOT EXISTS orders (
     order_id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    order_code          VARCHAR(30) NOT NULL,
     client_id           INT UNSIGNED NOT NULL,
     order_date          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     order_status        ENUM('PENDING', 'PROCESSING', 'DISPATCHED', 'DELIVERED', 'CANCELLED')
@@ -144,6 +150,7 @@ CREATE TABLE IF NOT EXISTS orders (
     dispatched_at       DATETIME NULL,
     notes               VARCHAR(500) NULL,
     PRIMARY KEY (order_id),
+    UNIQUE KEY uq_orders_order_code (order_code),
     KEY ix_orders_client_date (client_id, order_date),
     KEY ix_orders_status_date (order_status, order_date),
     CONSTRAINT fk_orders_client
@@ -174,6 +181,7 @@ CREATE TABLE IF NOT EXISTS deliveries (
     order_id            BIGINT UNSIGNED NOT NULL,
     agent_id            INT UNSIGNED NULL,
     delivery_address    VARCHAR(300) NOT NULL COMMENT 'Address snapshot for this order.',
+    scheduled_for       DATE NULL,
     delivery_status     ENUM('ASSIGNED', 'DISPATCHED', 'IN_TRANSIT', 'DELIVERED', 'FAILED', 'CANCELLED')
                         NOT NULL DEFAULT 'ASSIGNED',
     assigned_at         DATETIME NULL,
@@ -209,12 +217,7 @@ CREATE TABLE IF NOT EXISTS email_notifications (
         ON UPDATE CASCADE ON DELETE RESTRICT,
     CONSTRAINT fk_email_notifications_delivery
         FOREIGN KEY (delivery_id) REFERENCES deliveries (delivery_id)
-        ON UPDATE CASCADE ON DELETE RESTRICT,
-    CONSTRAINT chk_email_notification_target CHECK (
-        (notification_type = 'ORDER_DISPATCHED' AND order_id IS NOT NULL AND delivery_id IS NULL)
-        OR
-        (notification_type = 'DELIVERY_ASSIGNED' AND delivery_id IS NOT NULL AND order_id IS NULL)
-    )
+        ON UPDATE CASCADE ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
 -- Create a matching inventory row automatically for each new product.
@@ -266,6 +269,70 @@ BEGIN
     UPDATE inventory
     SET quantity_on_hand = quantity_on_hand - OLD.quantity_received
     WHERE product_id = OLD.product_id;
+END$$
+
+-- Reject overselling and deduct stock in the same transaction as the order item.
+DROP TRIGGER IF EXISTS trg_order_items_before_insert$$
+CREATE TRIGGER trg_order_items_before_insert
+BEFORE INSERT ON order_items
+FOR EACH ROW
+BEGIN
+    UPDATE inventory AS i
+    JOIN products AS p ON p.product_id = i.product_id
+    SET i.quantity_on_hand = i.quantity_on_hand - NEW.quantity
+    WHERE i.product_id = NEW.product_id
+      AND p.is_active = TRUE
+      AND i.quantity_on_hand >= NEW.quantity;
+    IF ROW_COUNT() = 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Insufficient inventory for order item';
+    END IF;
+END$$
+
+-- Restore reserved stock once when an order is cancelled.
+DROP TRIGGER IF EXISTS trg_orders_after_cancel$$
+CREATE TRIGGER trg_orders_after_cancel
+AFTER UPDATE ON orders
+FOR EACH ROW
+BEGIN
+    IF OLD.order_status <> 'CANCELLED' AND NEW.order_status = 'CANCELLED' THEN
+        UPDATE inventory AS i
+        JOIN order_items AS oi ON oi.product_id = i.product_id
+        SET i.quantity_on_hand = i.quantity_on_hand + oi.quantity
+        WHERE oi.order_id = NEW.order_id;
+    END IF;
+END$$
+
+-- MariaDB versions may reject CHECK constraints on columns that also have foreign keys.
+DROP TRIGGER IF EXISTS trg_email_notifications_validate_insert$$
+CREATE TRIGGER trg_email_notifications_validate_insert
+BEFORE INSERT ON email_notifications
+FOR EACH ROW
+BEGIN
+    IF NOT (
+        (NEW.notification_type = 'ORDER_DISPATCHED'
+            AND NEW.order_id IS NOT NULL AND NEW.delivery_id IS NULL)
+        OR
+        (NEW.notification_type = 'DELIVERY_ASSIGNED'
+            AND NEW.delivery_id IS NOT NULL AND NEW.order_id IS NULL)
+    ) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid email notification target';
+    END IF;
+END$$
+
+DROP TRIGGER IF EXISTS trg_email_notifications_validate_update$$
+CREATE TRIGGER trg_email_notifications_validate_update
+BEFORE UPDATE ON email_notifications
+FOR EACH ROW
+BEGIN
+    IF NOT (
+        (NEW.notification_type = 'ORDER_DISPATCHED'
+            AND NEW.order_id IS NOT NULL AND NEW.delivery_id IS NULL)
+        OR
+        (NEW.notification_type = 'DELIVERY_ASSIGNED'
+            AND NEW.delivery_id IS NOT NULL AND NEW.order_id IS NULL)
+    ) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid email notification target';
+    END IF;
 END$$
 DELIMITER ;
 

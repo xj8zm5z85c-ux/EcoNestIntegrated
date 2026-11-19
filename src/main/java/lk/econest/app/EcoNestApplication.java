@@ -1,6 +1,6 @@
 package lk.econest.app;
 
-import com.econest.task7.storage.Task7CsvRepository;
+import com.econest.task7.storage.Task7DatabaseRepository;
 import com.econest.task7.ui.Task7MainFrame;
 import com.mycompany.econesttask3inventory.Task3InventoryFrame;
 import com.mycompany.econesttask3inventory.Task3InventoryRepository;
@@ -15,7 +15,6 @@ import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.GridLayout;
-import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Supplier;
@@ -27,9 +26,11 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
-import lk.econest.catalog.Task1CsvProductRepository;
+import lk.econest.catalog.Task1ProductRepository;
 import lk.econest.catalog.Task1ProductCatalogFrame;
 import views.Task2ClientManagerApp;
+import lk.econest.db.ClientRepository;
+import lk.econest.db.Database;
 
 /** Single entry point for the task modules combined into the EcoNest desktop project. */
 public final class EcoNestApplication extends JFrame {
@@ -76,13 +77,13 @@ public final class EcoNestApplication extends JFrame {
 
         JPanel grid = new JPanel(new GridLayout(0, 2, 14, 14));
         grid.setOpaque(false);
-        addModuleButton(grid, "Product Catalogue", "Product Catalogue", () -> new Task1ProductCatalogFrame(
-                new Task1CsvProductRepository(Path.of(System.getProperty("user.home"), ".econest", "products.csv"))));
-        addModuleButton(grid, "Clients", "Clients", Task2ClientManagerApp::new);
+        addModuleButton(grid, "Product Catalogue", "Product Catalogue",
+                () -> new Task1ProductCatalogFrame(new Task1ProductRepository()));
+        addModuleButton(grid, "Clients", "Clients", () -> new Task2ClientManagerApp(new ClientRepository()));
         addModuleButton(grid, "Inventory", "Inventory", EcoNestApplication::createInventoryFrame);
         addModuleButton(grid, "Delivery Agents", "Delivery Agents", EcoNestApplication::createDeliveryAgentFrame);
         addModuleButton(grid, "Orders and Deliveries", "Orders and Deliveries", Tasks56EcoNestApp::new);
-        addModuleButton(grid, "Monthly Reports", "Monthly Reports", () -> new Task7MainFrame(new Task7CsvRepository()));
+        addModuleButton(grid, "Monthly Reports", "Monthly Reports", () -> new Task7MainFrame(new Task7DatabaseRepository()));
         addModuleButton(grid, "Email Notifications", "Email Notifications", Tasks89NotificationDemoFrame::new);
         area.add(grid, BorderLayout.CENTER);
         return area;
@@ -92,7 +93,8 @@ public final class EcoNestApplication extends JFrame {
         try {
             return new Task3InventoryFrame(new Task3InventoryService(new Task3InventoryRepository()));
         } catch (java.io.IOException | ClassNotFoundException exception) {
-            throw new IllegalStateException("Could not initialize inventory storage.", exception);
+            throw new IllegalStateException(
+                    "Could not initialize inventory storage: " + exception.getMessage(), exception);
         }
     }
 
@@ -121,12 +123,13 @@ public final class EcoNestApplication extends JFrame {
 
     private void openModule(String key, Supplier<JFrame> factory) {
         try {
-            JFrame window = openWindows.get(key);
-            if (window == null || !window.isDisplayable()) {
-                window = factory.get();
-                window.setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
-                openWindows.put(key, window);
+            JFrame previous = openWindows.remove(key);
+            if (previous != null && previous.isDisplayable()) {
+                previous.dispose();
             }
+            JFrame window = factory.get();
+            window.setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
+            openWindows.put(key, window);
             window.setVisible(true);
             window.setState(JFrame.NORMAL);
             window.toFront();
@@ -144,7 +147,17 @@ public final class EcoNestApplication extends JFrame {
             } catch (Exception ignored) {
                 // Swing's default look and feel remains available.
             }
-            new EcoNestApplication().setVisible(true);
+            try {
+                Database.verifyConnection();
+                new EcoNestApplication().setVisible(true);
+            } catch (java.sql.SQLException exception) {
+                JOptionPane.showMessageDialog(null,
+                        "Could not connect to the shared EcoNest database.\n"
+                                + exception.getMessage()
+                                + "\n\nCheck ECONEST_DB_URL, ECONEST_DB_USER, and ECONEST_DB_PASSWORD "
+                                + "and ensure the database schema has been installed.",
+                        "Database connection error", JOptionPane.ERROR_MESSAGE);
+            }
         });
     }
 }

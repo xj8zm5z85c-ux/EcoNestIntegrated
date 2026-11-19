@@ -1,6 +1,6 @@
 package com.econest.task7;
 
-import com.econest.task7.storage.Task7CsvRepository;
+import com.econest.task7.storage.Task7DatabaseRepository;
 import com.econest.task7.ui.Task7MainFrame;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
@@ -15,7 +15,7 @@ public final class Task7App {
             } catch (Exception ignored) {
                 // The default Swing look and feel is still usable.
             }
-            new Task7MainFrame(new Task7CsvRepository()).setVisible(true);
+            new Task7MainFrame(new Task7DatabaseRepository()).setVisible(true);
         });
     }
 }

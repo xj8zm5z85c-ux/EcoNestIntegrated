@@ -1,15 +1,19 @@
 package com.mycompany.econesttask8and9;
 
+import java.io.IOException;
+
 /** Implements the email notifications required by EcoNest Tasks 8 and 9. */
 public class Tasks89EmailNotificationService {
 
     private final Tasks89EmailSender emailSender;
+    private final Tasks89NotificationRepository notificationRepository;
 
     public Tasks89EmailNotificationService(Tasks89EmailSender emailSender) {
         if (emailSender == null) {
             throw new IllegalArgumentException("Email sender is required.");
         }
         this.emailSender = emailSender;
+        this.notificationRepository = new Tasks89NotificationRepository();
     }
 
     /** Task 8: notify a client after their order has been marked as dispatched. */
@@ -24,7 +28,8 @@ public class Tasks89EmailNotificationService {
                 + "Thank you for choosing EcoNest.\n\n"
                 + "EcoNest Home & Garden";
 
-        emailSender.send(requireText(clientEmail, "Client email address"), subject, body);
+        sendTracked(true, safeOrderId, safeClientName,
+                requireText(clientEmail, "Client email address"), null, subject, body);
     }
 
     /** Task 9: notify a delivery agent when a new delivery is assigned to them. */
@@ -42,7 +47,40 @@ public class Tasks89EmailNotificationService {
                 + "Please sign in to EcoNest to review the delivery details.\n\n"
                 + "EcoNest Home & Garden";
 
-        emailSender.send(requireText(agentEmail, "Delivery agent email address"), subject, body);
+        sendTracked(false, safeOrderId, safeAgentName,
+                requireText(agentEmail, "Delivery agent email address"), safeAddress, subject, body);
+    }
+
+    private void sendTracked(boolean dispatch, String orderCode, String contactName, String recipient,
+            String deliveryAddress, String subject, String body) throws Tasks89EmailDeliveryException {
+        final long notificationId;
+        try {
+            notificationId = dispatch
+                    ? notificationRepository.beginDispatchNotification(orderCode, contactName, recipient)
+                    : notificationRepository.beginAssignmentNotification(
+                            orderCode, contactName, recipient, deliveryAddress);
+        } catch (IOException exception) {
+            throw new Tasks89EmailDeliveryException(
+                    "Email was not sent because its database audit record could not be created: "
+                            + exception.getMessage(), exception);
+        }
+        try {
+            emailSender.send(recipient, subject, body);
+        } catch (Tasks89EmailDeliveryException exception) {
+            try {
+                notificationRepository.markFailed(notificationId, exception.getMessage());
+            } catch (IOException auditException) {
+                exception.addSuppressed(auditException);
+            }
+            throw exception;
+        }
+        try {
+            notificationRepository.markSent(notificationId);
+        } catch (IOException exception) {
+            throw new Tasks89EmailDeliveryException(
+                    "Email was sent, but its database audit status could not be updated: "
+                            + exception.getMessage(), exception);
+        }
     }
 
     private static String requireText(String value, String label) {
