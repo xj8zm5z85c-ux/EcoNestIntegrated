@@ -2,6 +2,8 @@
 
 EcoNest is a Java desktop application that brings the group's Task 1–9 features together behind one launcher. The modules share a MariaDB/MySQL database, so products, clients, stock, orders, deliveries, reports, and email audit records use the same source of truth.
 
+All product prices, order totals, and sales reports are displayed and interpreted in **Sri Lankan rupees (LKR)**, regardless of the computer's regional settings. The database stores monetary amounts as decimal numbers without a currency code; switching the display to LKR does not convert or modify existing amounts.
+
 ## Contents
 
 - [Prerequisites](#prerequisites)
