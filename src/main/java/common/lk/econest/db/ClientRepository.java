@@ -56,11 +56,22 @@ public final class ClientRepository {
     }
 
     public void delete(String clientCode) throws IOException {
+        String referenceCheck = "SELECT COUNT(*) FROM orders o "
+                + "JOIN clients c ON c.client_id = o.client_id "
+                + "WHERE c.client_code = ?";
         String sql = "DELETE FROM clients WHERE client_code = ?";
         try (Connection connection = Database.openConnection();
-                PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setString(1, clientCode);
-            if (statement.executeUpdate() != 1) {
+                PreparedStatement checkStatement = connection.prepareStatement(referenceCheck);
+                PreparedStatement deleteStatement = connection.prepareStatement(sql)) {
+            checkStatement.setString(1, clientCode);
+            try (ResultSet rows = checkStatement.executeQuery()) {
+                if (rows.next() && rows.getInt(1) > 0) {
+                    throw new IOException("This client has existing orders and cannot be deleted.");
+                }
+            }
+
+            deleteStatement.setString(1, clientCode);
+            if (deleteStatement.executeUpdate() != 1) {
                 throw new IOException("Client was not found: " + clientCode);
             }
         } catch (SQLException exception) {
