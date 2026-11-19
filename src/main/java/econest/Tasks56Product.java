@@ -2,6 +2,7 @@ package econest;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
+import lk.econest.money.MoneyFormatter;
 
 public class Tasks56Product implements Serializable {
     private static final long serialVersionUID = 1L;
@@ -29,5 +30,5 @@ public class Tasks56Product implements Serializable {
         if (amount < 1 || amount > quantityOnHand) throw new IllegalArgumentException("Not enough stock.");
         quantityOnHand -= amount;
     }
-    @Override public String toString() { return name + " — LKR " + String.format("%,.2f", price) + " (stock: " + quantityOnHand + ")"; }
+    @Override public String toString() { return name + " — " + MoneyFormatter.format(price) + " (stock: " + quantityOnHand + ")"; }
 }

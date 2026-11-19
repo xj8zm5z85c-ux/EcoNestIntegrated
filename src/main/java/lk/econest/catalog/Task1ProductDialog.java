@@ -27,7 +27,7 @@ public final class Task1ProductDialog extends JDialog {
         fields.add(new JLabel("SKU")); fields.add(skuField);
         fields.add(new JLabel("Product name")); fields.add(nameField);
         fields.add(new JLabel("Category")); fields.add(typeField);
-        fields.add(new JLabel("Price")); fields.add(priceField);
+        fields.add(new JLabel("Price (LKR)")); fields.add(priceField);
         fields.add(new JLabel("Eco-rating (1–5)")); fields.add(ratingField);
 
         javax.swing.JButton save = new javax.swing.JButton("Save product");
@@ -62,7 +62,7 @@ public final class Task1ProductDialog extends JDialog {
                     (Integer) ratingField.getSelectedItem());
             dispose();
         } catch (NumberFormatException ex) {
-            showValidationError("Enter a valid price, such as 1250.00.");
+            showValidationError("Enter a valid price in LKR, such as 1250.00.");
         } catch (IllegalArgumentException ex) {
             showValidationError(ex.getMessage());
         }

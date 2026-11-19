@@ -8,7 +8,6 @@ import java.awt.BorderLayout;
 import java.awt.FlowLayout;
 import java.awt.GridLayout;
 import java.io.IOException;
-import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.time.LocalDate;
@@ -30,6 +29,7 @@ import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.ListSelectionModel;
 import javax.swing.table.DefaultTableModel;
+import lk.econest.money.MoneyFormatter;
 
 public final class Task7MainFrame extends JFrame {
     private final Task7DatabaseRepository repository;
@@ -121,8 +121,8 @@ public final class Task7MainFrame extends JFrame {
             text.append("Report month: ").append(month).append("\n\n");
             text.append("SALES SUMMARY\n");
             text.append("Non-cancelled orders: ").append(latestReport.orderCount()).append('\n');
-            text.append("Total revenue:     LKR ").append(money(latestReport.revenue())).append('\n');
-            text.append("Average per order: LKR ").append(money(latestReport.averageOrderValue())).append("\n\n");
+            text.append("Total revenue:     ").append(MoneyFormatter.format(latestReport.revenue())).append('\n');
+            text.append("Average per order: ").append(MoneyFormatter.format(latestReport.averageOrderValue())).append("\n\n");
             text.append("LOW-STOCK ALERTS (current inventory)\n");
             if (latestReport.lowStockProducts().isEmpty()) {
                 text.append("No products are at or below their reorder level.\n");
@@ -166,12 +166,16 @@ public final class Task7MainFrame extends JFrame {
 
     private void refreshInventoryTable() {
         inventoryModel.setRowCount(0);
-        for (Task7ProductStock p : inventory) inventoryModel.addRow(new Object[]{p.sku(), p.name(), p.quantity(), p.reorderLevel(), p.unitPrice()});
+        for (Task7ProductStock p : inventory) inventoryModel.addRow(new Object[]{
+            p.sku(), p.name(), p.quantity(), p.reorderLevel(), MoneyFormatter.format(p.unitPrice())
+        });
     }
 
     private void refreshSalesTable() {
         salesModel.setRowCount(0);
-        for (Task7Sale s : sales) salesModel.addRow(new Object[]{s.orderId(), s.date(), s.clientName(), s.total()});
+        for (Task7Sale s : sales) salesModel.addRow(new Object[]{
+            s.orderId(), s.date(), s.clientName(), MoneyFormatter.format(s.total())
+        });
     }
 
     private static DefaultTableModel model(String... columns) {
@@ -188,7 +192,6 @@ public final class Task7MainFrame extends JFrame {
         return table;
     }
 
-    private static String money(BigDecimal amount) { return amount.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString(); }
     private static String truncate(String text, int max) { return text.length() <= max ? text : text.substring(0, max - 3) + "..."; }
     private static String csv(String text) { return "\"" + text.replace("\"", "\"\"") + "\""; }
 

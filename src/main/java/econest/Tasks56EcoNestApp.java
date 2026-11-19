@@ -33,6 +33,7 @@ import javax.swing.SpinnerNumberModel;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import javax.swing.table.DefaultTableModel;
+import lk.econest.money.MoneyFormatter;
 
 /** EcoNest desktop workflow for processing client orders and assigning deliveries. */
 public class Tasks56EcoNestApp extends JFrame {
@@ -108,7 +109,7 @@ public class Tasks56EcoNestApp extends JFrame {
         fields.add(addItem, c);
         create.add(fields, BorderLayout.NORTH);
 
-        cartModel = readOnlyModel(new String[]{"Product", "Unit price", "Qty", "Line total"});
+        cartModel = readOnlyModel(new String[]{"Product", "Unit price (LKR)", "Qty", "Line total (LKR)"});
         JTable cartTable = makeTable(cartModel);
         JScrollPane cartScroll = new JScrollPane(cartTable); cartScroll.setPreferredSize(new Dimension(400, 155));
         create.add(cartScroll, BorderLayout.CENTER);
@@ -126,7 +127,7 @@ public class Tasks56EcoNestApp extends JFrame {
         create.add(cartFooter, BorderLayout.SOUTH);
 
         JPanel register = cardPanel("Recent orders");
-        ordersModel = readOnlyModel(new String[]{"Order ID", "Date", "Client", "Items", "Total", "Delivery status"});
+        ordersModel = readOnlyModel(new String[]{"Order ID", "Date", "Client", "Items", "Total (LKR)", "Delivery status"});
         ordersTable = makeTable(ordersModel);
         register.add(new JScrollPane(ordersTable), BorderLayout.CENTER);
         JPanel bottom = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0)); bottom.setOpaque(false);
@@ -339,8 +340,7 @@ public class Tasks56EcoNestApp extends JFrame {
         table.getTableHeader().setFont(new Font("SansSerif", Font.BOLD, 12)); table.getTableHeader().setBackground(new Color(231, 241, 233)); table.setSelectionMode(javax.swing.ListSelectionModel.SINGLE_SELECTION); return table;
     }
     private String formatMoney(BigDecimal value) {
-        return "LKR " + String.format("%,.2f",
-                value.setScale(2, java.math.RoundingMode.HALF_UP));
+        return MoneyFormatter.format(value);
     }
     private void showError(String message) { JOptionPane.showMessageDialog(this, message, "Please check", JOptionPane.WARNING_MESSAGE); }
 
