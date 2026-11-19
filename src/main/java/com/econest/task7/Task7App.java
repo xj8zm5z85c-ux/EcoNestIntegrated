@@ -1,0 +1,21 @@
+package com.econest.task7;
+
+import com.econest.task7.storage.Task7CsvRepository;
+import com.econest.task7.ui.Task7MainFrame;
+import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
+
+public final class Task7App {
+    private Task7App() { }
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> {
+            try {
+                UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+            } catch (Exception ignored) {
+                // The default Swing look and feel is still usable.
+            }
+            new Task7MainFrame(new Task7CsvRepository()).setVisible(true);
+        });
+    }
+}
