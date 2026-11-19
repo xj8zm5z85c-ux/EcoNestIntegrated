@@ -63,4 +63,16 @@ public class Task3InventoryItem implements Serializable {
         quantityOnHand += record.getQuantityReceived();
         stockInHistory.add(record);
     }
+
+    void addHistoricalStock(Task3StockInRecord record) {
+        stockInHistory.add(record);
+    }
+
+    void setQuantityOnHand(int quantityOnHand) {
+        this.quantityOnHand = quantityOnHand;
+    }
+
+    void setReorderLevelFromStorage(int reorderLevel) {
+        this.reorderLevel = reorderLevel;
+    }
 }

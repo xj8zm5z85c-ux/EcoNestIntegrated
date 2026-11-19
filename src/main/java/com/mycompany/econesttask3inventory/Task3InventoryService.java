@@ -21,14 +21,16 @@ public class Task3InventoryService {
         this.inventory = new ArrayList<>(repository.loadAll());
     }
 
-    public List<Task3InventoryItem> getAllItems() {
+    public List<Task3InventoryItem> getAllItems() throws IOException {
+        reload();
         List<Task3InventoryItem> result = new ArrayList<>(inventory);
         result.sort(Comparator.comparing(Task3InventoryItem::getProductName,
                 String.CASE_INSENSITIVE_ORDER));
         return result;
     }
 
-    public List<Task3InventoryItem> getLowStockItems() {
+    public List<Task3InventoryItem> getLowStockItems() throws IOException {
+        reload();
         List<Task3InventoryItem> result = new ArrayList<>();
         for (Task3InventoryItem item : inventory) {
             if (item.isLowStock()) {
@@ -38,25 +40,10 @@ public class Task3InventoryService {
         return result;
     }
 
-    public void addProduct(String productId, String productName,
-            int initialQuantity, int reorderLevel) throws IOException {
-        String id = requireText(productId, "Product ID");
-        String name = requireText(productName, "Product name");
-        requireNonNegative(initialQuantity, "Initial quantity");
-        requireNonNegative(reorderLevel, "Reorder level");
-
-        if (findItem(id) != null) {
-            throw new IllegalArgumentException("That product ID already exists.");
-        }
-        inventory.add(new Task3InventoryItem(id, name, initialQuantity, reorderLevel));
-        persist();
-    }
-
     public void setReorderLevel(String productId, int reorderLevel) throws IOException {
         requireNonNegative(reorderLevel, "Reorder level");
-        Task3InventoryItem item = requireItem(productId);
-        item.setReorderLevel(reorderLevel);
-        persist();
+        repository.setReorderLevel(requireText(productId, "Product ID"), reorderLevel);
+        reload();
     }
 
     public void recordStockIn(String productId, String supplierName, int quantity)
@@ -66,9 +53,10 @@ public class Task3InventoryService {
             throw new IllegalArgumentException("Stock-in quantity must be greater than zero.");
         }
 
-        Task3InventoryItem item = requireItem(productId);
-        item.receiveStock(new Task3StockInRecord(supplier, quantity, LocalDateTime.now()));
-        persist();
+        String id = requireText(productId, "Product ID");
+        requireItem(id);
+        repository.recordStockIn(id, supplier, quantity);
+        reload();
     }
 
     public Task3InventoryItem getItem(String productId) {
@@ -92,8 +80,9 @@ public class Task3InventoryService {
         return null;
     }
 
-    private void persist() throws IOException {
-        repository.saveAll(inventory);
+    private void reload() throws IOException {
+        inventory.clear();
+        inventory.addAll(repository.loadAll());
     }
 
     private static String requireText(String value, String label) {

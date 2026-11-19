@@ -59,7 +59,7 @@ public class Task3InventoryFrame extends JFrame {
 
         add(topPanel, BorderLayout.NORTH);
         add(new JScrollPane(inventoryTable), BorderLayout.CENTER);
-        add(new JLabel("Inventory data is saved locally in your .econest folder."),
+        add(new JLabel("Inventory is shared with the product catalogue and order workflow."),
                 BorderLayout.SOUTH);
 
         refreshTable();
@@ -67,52 +67,18 @@ public class Task3InventoryFrame extends JFrame {
 
     private JPanel createToolbar() {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
-        JButton addButton = new JButton("Add Product");
         JButton reorderButton = new JButton("Set Reorder Level");
         JButton stockInButton = new JButton("Record Stock-In");
         JButton historyButton = new JButton("Stock-In History");
 
-        addButton.addActionListener(event -> addProduct());
         reorderButton.addActionListener(event -> editReorderLevel());
         stockInButton.addActionListener(event -> recordStockIn());
         historyButton.addActionListener(event -> showStockInHistory());
 
-        panel.add(addButton);
         panel.add(reorderButton);
         panel.add(stockInButton);
         panel.add(historyButton);
         return panel;
-    }
-
-    private void addProduct() {
-        JTextField idField = new JTextField(18);
-        JTextField nameField = new JTextField(18);
-        JSpinner quantitySpinner = new JSpinner(new SpinnerNumberModel(0, 0, 1_000_000, 1));
-        JSpinner reorderSpinner = new JSpinner(new SpinnerNumberModel(0, 0, 1_000_000, 1));
-
-        JPanel form = new JPanel(new GridLayout(0, 2, 8, 8));
-        form.add(new JLabel("Product ID:"));
-        form.add(idField);
-        form.add(new JLabel("Product name:"));
-        form.add(nameField);
-        form.add(new JLabel("Starting quantity:"));
-        form.add(quantitySpinner);
-        form.add(new JLabel("Reorder level:"));
-        form.add(reorderSpinner);
-
-        int answer = JOptionPane.showConfirmDialog(this, form, "Add Inventory Product",
-                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
-        if (answer != JOptionPane.OK_OPTION) {
-            return;
-        }
-
-        try {
-            service.addProduct(idField.getText(), nameField.getText(),
-                    (Integer) quantitySpinner.getValue(), (Integer) reorderSpinner.getValue());
-            refreshTable();
-        } catch (IllegalArgumentException | IOException exception) {
-            showError(exception.getMessage());
-        }
     }
 
     private void editReorderLevel() {
@@ -204,10 +170,15 @@ public class Task3InventoryFrame extends JFrame {
     }
 
     private void refreshTable() {
-        tableModel.setItems(service.getAllItems());
-        int lowStockCount = service.getLowStockItems().size();
-        summaryLabel.setText("Products: " + tableModel.getRowCount()
-                + "     |     Low stock: " + lowStockCount);
+        try {
+            List<Task3InventoryItem> items = service.getAllItems();
+            tableModel.setItems(items);
+            long lowStockCount = items.stream().filter(Task3InventoryItem::isLowStock).count();
+            summaryLabel.setText("Products: " + tableModel.getRowCount()
+                    + "     |     Low stock: " + lowStockCount);
+        } catch (IOException exception) {
+            showError("Could not refresh inventory: " + exception.getMessage());
+        }
     }
 
     private void showError(String message) {

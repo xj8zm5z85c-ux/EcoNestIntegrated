@@ -24,14 +24,8 @@ public class Tasks89NotificationDemoFrame extends JFrame {
     private final JTextField smtpUsernameField = new JTextField(24);
     private final JPasswordField smtpPasswordField = new JPasswordField(24);
 
-    private final JTextField clientNameField = new JTextField(24);
-    private final JTextField clientEmailField = new JTextField(24);
     private final JTextField dispatchOrderIdField = new JTextField(24);
-
-    private final JTextField agentNameField = new JTextField(24);
-    private final JTextField agentEmailField = new JTextField(24);
     private final JTextField assignmentOrderIdField = new JTextField(24);
-    private final JTextField deliveryAddressField = new JTextField(24);
 
     public Tasks89NotificationDemoFrame() {
         super("EcoNest - Tasks 8 and 9 Email Notifications");
@@ -47,7 +41,8 @@ public class Tasks89NotificationDemoFrame extends JFrame {
 
         add(smtpPanel, BorderLayout.NORTH);
         add(tabs, BorderLayout.CENTER);
-        add(new JLabel("SMTP credentials are used only while this application is running."),
+        add(new JLabel("<html>SMTP credentials are used only while this application is running. "
+                + "For Gmail, use an App Password and use the same address for From and username.</html>"),
                 BorderLayout.SOUTH);
     }
 
@@ -65,12 +60,11 @@ public class Tasks89NotificationDemoFrame extends JFrame {
     private JPanel createClientPanel() {
         JPanel panel = new JPanel(new GridBagLayout());
         panel.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
-        addRow(panel, 0, "Client name:", clientNameField);
-        addRow(panel, 1, "Client email:", clientEmailField);
-        addRow(panel, 2, "Order ID:", dispatchOrderIdField);
+        addRow(panel, 0, "Dispatched order ID:", dispatchOrderIdField);
+        addInfoRow(panel, 1, "Recipient:", "The linked client's email is loaded from the database.");
 
         JButton sendButton = new JButton("Send dispatch email");
-        addButton(panel, 3, sendButton);
+        addButton(panel, 2, sendButton);
         sendButton.addActionListener(event -> sendClientDispatchEmail(sendButton));
         return panel;
     }
@@ -78,13 +72,11 @@ public class Tasks89NotificationDemoFrame extends JFrame {
     private JPanel createAgentPanel() {
         JPanel panel = new JPanel(new GridBagLayout());
         panel.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
-        addRow(panel, 0, "Delivery agent name:", agentNameField);
-        addRow(panel, 1, "Delivery agent email:", agentEmailField);
-        addRow(panel, 2, "Order ID:", assignmentOrderIdField);
-        addRow(panel, 3, "Delivery address:", deliveryAddressField);
+        addRow(panel, 0, "Assigned order ID:", assignmentOrderIdField);
+        addInfoRow(panel, 1, "Recipient:", "The assigned agent and address are loaded from the database.");
 
         JButton sendButton = new JButton("Send assignment email");
-        addButton(panel, 4, sendButton);
+        addButton(panel, 2, sendButton);
         sendButton.addActionListener(event -> sendAgentAssignmentEmail(sendButton));
         return panel;
     }
@@ -92,11 +84,9 @@ public class Tasks89NotificationDemoFrame extends JFrame {
     private void sendClientDispatchEmail(JButton sendButton) {
         try {
             Tasks89EmailNotificationService service = createNotificationService();
-            String clientName = clientNameField.getText().trim();
-            String clientEmail = clientEmailField.getText().trim();
             String orderId = dispatchOrderIdField.getText().trim();
             runEmailTask(sendButton, "Send dispatch email", () ->
-                    service.notifyClientOrderDispatched(clientName, clientEmail, orderId));
+                    service.notifyClientOrderDispatched(orderId));
         } catch (IllegalArgumentException exception) {
             showError(exception.getMessage());
         }
@@ -105,13 +95,9 @@ public class Tasks89NotificationDemoFrame extends JFrame {
     private void sendAgentAssignmentEmail(JButton sendButton) {
         try {
             Tasks89EmailNotificationService service = createNotificationService();
-            String agentName = agentNameField.getText().trim();
-            String agentEmail = agentEmailField.getText().trim();
             String orderId = assignmentOrderIdField.getText().trim();
-            String deliveryAddress = deliveryAddressField.getText().trim();
             runEmailTask(sendButton, "Send assignment email", () ->
-                    service.notifyAgentDeliveryAssigned(agentName, agentEmail,
-                            orderId, deliveryAddress));
+                    service.notifyAgentDeliveryAssigned(orderId));
         } catch (IllegalArgumentException exception) {
             showError(exception.getMessage());
         }
@@ -193,6 +179,23 @@ public class Tasks89NotificationDemoFrame extends JFrame {
         constraints.anchor = GridBagConstraints.EAST;
         constraints.insets = new Insets(12, 0, 4, 6);
         panel.add(button, constraints);
+    }
+
+    private static void addInfoRow(JPanel panel, int row, String label, String value) {
+        GridBagConstraints labelConstraints = new GridBagConstraints();
+        labelConstraints.gridx = 0;
+        labelConstraints.gridy = row;
+        labelConstraints.anchor = GridBagConstraints.WEST;
+        labelConstraints.insets = new Insets(4, 6, 4, 8);
+        panel.add(new JLabel(label), labelConstraints);
+
+        GridBagConstraints valueConstraints = new GridBagConstraints();
+        valueConstraints.gridx = 1;
+        valueConstraints.gridy = row;
+        valueConstraints.weightx = 1.0;
+        valueConstraints.fill = GridBagConstraints.HORIZONTAL;
+        valueConstraints.insets = new Insets(4, 0, 4, 6);
+        panel.add(new JLabel(value), valueConstraints);
     }
 
     @FunctionalInterface

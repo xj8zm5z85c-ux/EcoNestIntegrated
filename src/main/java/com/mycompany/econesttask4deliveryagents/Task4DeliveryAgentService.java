@@ -36,8 +36,8 @@ public class Task4DeliveryAgentService {
         }
         Task4DeliveryAgent agent = createValidatedAgent(id, name, phone, email,
                 vehicleRegistrationNo, vehicleType, vehicleModel);
-        agents.add(agent);
-        persist();
+        repository.insert(agent);
+        reload();
     }
 
     public void updateAgent(String agentId, String name, String phone, String email,
@@ -46,15 +46,13 @@ public class Task4DeliveryAgentService {
         Task4DeliveryAgent agent = requireAgent(agentId);
         Task4DeliveryAgent validated = createValidatedAgent(agent.getAgentId(), name, phone,
                 email, vehicleRegistrationNo, vehicleType, vehicleModel);
-        agent.updateDetails(validated.getName(), validated.getPhone(), validated.getEmail(),
-                validated.getVehicleRegistrationNo(), validated.getVehicleType(),
-                validated.getVehicleModel());
-        persist();
+        repository.update(validated);
+        reload();
     }
 
     public void removeAgent(String agentId) throws IOException {
-        agents.remove(requireAgent(agentId));
-        persist();
+        repository.deactivate(requireAgent(agentId).getAgentId());
+        reload();
     }
 
     private Task4DeliveryAgent createValidatedAgent(String agentId, String name, String phone,
@@ -91,8 +89,9 @@ public class Task4DeliveryAgentService {
         return null;
     }
 
-    private void persist() throws IOException {
-        repository.saveAll(agents);
+    private void reload() throws IOException {
+        agents.clear();
+        agents.addAll(repository.loadAll());
     }
 
     private static String requireText(String value, String label) {

@@ -1,15 +1,14 @@
 package lk.econest.catalog;
 
-import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.List;
 import javax.swing.table.AbstractTableModel;
+import lk.econest.money.MoneyFormatter;
 
 /** Read-only table view of catalogue products. */
 public final class Task1ProductTableModel extends AbstractTableModel {
-    private static final String[] COLUMNS = {"SKU", "Product name", "Category", "Price", "Eco-rating"};
+    private static final String[] COLUMNS = {"SKU", "Product name", "Category", "Price (LKR)", "Eco-rating"};
     private final List<Task1Product> products = new ArrayList<>();
-    private final NumberFormat currency = NumberFormat.getCurrencyInstance();
 
     @Override
     public int getRowCount() { return products.size(); }
@@ -27,7 +26,7 @@ public final class Task1ProductTableModel extends AbstractTableModel {
             case 0 -> product.getSku();
             case 1 -> product.getName();
             case 2 -> product.getType();
-            case 3 -> currency.format(product.getPrice());
+            case 3 -> MoneyFormatter.format(product.getPrice());
             case 4 -> product.getEcoRating() + " / 5";
             default -> throw new IndexOutOfBoundsException("Unknown column: " + columnIndex);
         };
