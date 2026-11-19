@@ -281,6 +281,115 @@ public class Tasks56EcoNestStore {
         }
     }
 
+    public void cancelOrder(String orderCode) {
+        try (Connection connection = Database.openConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                Long orderId = findOrderId(connection, orderCode);
+                if (orderId == null) {
+                    throw new SQLException("Order was not found: " + orderCode);
+                }
+
+                try (PreparedStatement statement = connection.prepareStatement(
+                        "UPDATE orders SET order_status = 'CANCELLED' "
+                                + "WHERE order_id = ? AND order_status <> 'CANCELLED'")) {
+                    statement.setLong(1, orderId);
+                    if (statement.executeUpdate() != 1) {
+                        throw new SQLException("Order is already cancelled: " + orderCode);
+                    }
+                }
+
+                try (PreparedStatement statement = connection.prepareStatement(
+                        "UPDATE deliveries SET delivery_status = 'CANCELLED' "
+                                + "WHERE order_id = ?")) {
+                    statement.setLong(1, orderId);
+                    statement.executeUpdate();
+                }
+
+                connection.commit();
+            } catch (SQLException | RuntimeException exception) {
+                connection.rollback();
+                throw exception;
+            }
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Could not cancel order " + orderCode + ": "
+                    + exception.getMessage(), exception);
+        }
+
+        try {
+            reload();
+        } catch (SQLException exception) {
+            throw new IllegalStateException("The order was cancelled, but the latest data could not be reloaded: "
+                    + exception.getMessage(), exception);
+        }
+    }
+
+    public void removeDeliveredOrder(String orderCode) {
+        try (Connection connection = Database.openConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                Long orderId = findOrderId(connection, orderCode);
+                if (orderId == null) {
+                    throw new SQLException("Order was not found: " + orderCode);
+                }
+
+                try (PreparedStatement statement = connection.prepareStatement(
+                        "SELECT order_status FROM orders WHERE order_id = ? FOR UPDATE")) {
+                    statement.setLong(1, orderId);
+                    try (ResultSet row = statement.executeQuery()) {
+                        if (!row.next() || !"DELIVERED".equals(row.getString("order_status"))) {
+                            throw new SQLException("Only delivered orders can be permanently removed.");
+                        }
+                    }
+                }
+
+                try (PreparedStatement statement = connection.prepareStatement(
+                        "DELETE FROM email_notifications "
+                                + "WHERE order_id = ? OR delivery_id IN "
+                                + "(SELECT delivery_id FROM deliveries WHERE order_id = ?)")) {
+                    statement.setLong(1, orderId);
+                    statement.setLong(2, orderId);
+                    statement.executeUpdate();
+                }
+
+                try (PreparedStatement statement = connection.prepareStatement(
+                        "DELETE FROM deliveries WHERE order_id = ?")) {
+                    statement.setLong(1, orderId);
+                    statement.executeUpdate();
+                }
+
+                try (PreparedStatement statement = connection.prepareStatement(
+                        "DELETE FROM order_items WHERE order_id = ?")) {
+                    statement.setLong(1, orderId);
+                    statement.executeUpdate();
+                }
+
+                try (PreparedStatement statement = connection.prepareStatement(
+                        "DELETE FROM orders WHERE order_id = ?")) {
+                    statement.setLong(1, orderId);
+                    if (statement.executeUpdate() != 1) {
+                        throw new SQLException("Order could not be removed: " + orderCode);
+                    }
+                }
+
+                connection.commit();
+            } catch (SQLException | RuntimeException exception) {
+                connection.rollback();
+                throw exception;
+            }
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Could not remove order " + orderCode + ": "
+                    + exception.getMessage(), exception);
+        }
+
+        try {
+            reload();
+        } catch (SQLException exception) {
+            throw new IllegalStateException("The order was removed, but the latest data could not be reloaded: "
+                    + exception.getMessage(), exception);
+        }
+    }
+
     private static int findId(Connection connection, String sql, String code, String label)
             throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(sql)) {

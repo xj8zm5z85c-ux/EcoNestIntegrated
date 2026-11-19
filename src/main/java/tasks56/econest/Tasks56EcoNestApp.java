@@ -130,10 +130,17 @@ public class Tasks56EcoNestApp extends JFrame {
         ordersModel = readOnlyModel(new String[]{"Order ID", "Date", "Client", "Items", "Total (LKR)", "Delivery status"});
         ordersTable = makeTable(ordersModel);
         register.add(new JScrollPane(ordersTable), BorderLayout.CENTER);
-        JPanel bottom = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0)); bottom.setOpaque(false);
+        JPanel bottom = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0)); bottom.setOpaque(false);
         JButton details = secondaryButton("View order details");
         details.addActionListener(e -> showOrderDetails(ordersTable.getSelectedRow()));
-        bottom.add(details); register.add(bottom, BorderLayout.SOUTH);
+        JButton cancel = secondaryButton("Cancel order");
+        cancel.addActionListener(e -> cancelSelectedOrder());
+        JButton remove = secondaryButton("Remove delivered order");
+        remove.addActionListener(e -> removeDeliveredOrder());
+        bottom.add(details);
+        bottom.add(cancel);
+        bottom.add(remove);
+        register.add(bottom, BorderLayout.SOUTH);
         page.add(create, BorderLayout.NORTH); page.add(register, BorderLayout.CENTER);
         return page;
     }
@@ -269,6 +276,72 @@ public class Tasks56EcoNestApp extends JFrame {
             details.append("\nOrder total: ").append(formatMoney(order.getTotalAmount()));
             if (order.getDeliveryAgent() != null) details.append("\nDelivery: ").append(order.getDeliveryAgent().getName()).append(" on ").append(order.getDeliveryDate()).append(" ( ").append(order.getDeliveryStatus()).append(" )");
             JOptionPane.showMessageDialog(this, details.toString(), "Order details", JOptionPane.INFORMATION_MESSAGE); return;
+        }
+    }
+
+    private void cancelSelectedOrder() {
+        Tasks56ClientOrder order = selectedOrder(ordersTable);
+        if (order == null) {
+            showError("Select an order to cancel.");
+            return;
+        }
+        if (order.getDeliveryStatus() == Tasks56DeliveryStatus.DISPATCHED
+                || order.getDeliveryStatus() == Tasks56DeliveryStatus.DELIVERED) {
+            showError("Dispatched or delivered orders cannot be cancelled.");
+            return;
+        }
+
+        int answer = JOptionPane.showConfirmDialog(this,
+                "Cancel order " + order.getId() + "?",
+                "Confirm Order Cancellation",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE);
+        if (answer != JOptionPane.YES_OPTION) return;
+
+        try {
+            store.cancelOrder(order.getId());
+            refreshOrders();
+            refreshDeliveries();
+            refreshProductChoices();
+            JOptionPane.showMessageDialog(this,
+                    "Order " + order.getId() + " was cancelled and its reserved stock was restored.",
+                    "Order cancelled",
+                    JOptionPane.INFORMATION_MESSAGE);
+        } catch (IllegalStateException exception) {
+            showError(exception.getMessage());
+        }
+    }
+
+    private void removeDeliveredOrder() {
+        Tasks56ClientOrder order = selectedOrder(ordersTable);
+        if (order == null) {
+            showError("Select an order to remove.");
+            return;
+        }
+        if (order.getDeliveryStatus() != Tasks56DeliveryStatus.DELIVERED) {
+            showError("Only delivered orders can be permanently removed.");
+            return;
+        }
+
+        int answer = JOptionPane.showConfirmDialog(this,
+                "Permanently remove delivered order " + order.getId()
+                        + "?\nThis cannot be undone.",
+                "Confirm Permanent Removal",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE);
+        if (answer != JOptionPane.YES_OPTION) return;
+
+        try {
+            store.removeDeliveredOrder(order.getId());
+            refreshOrders();
+            refreshDeliveries();
+            refreshProductChoices();
+            JOptionPane.showMessageDialog(this,
+                    "Delivered order " + order.getId() + " was permanently removed.",
+                    "Order removed",
+                    JOptionPane.INFORMATION_MESSAGE);
+        } catch (IllegalStateException exception) {
+            showError(exception.getMessage());
         }
     }
 
