@@ -148,8 +148,13 @@ public class Task2ClientManagerApp extends JFrame {
     private void deleteClient() {
         int row = clientTable.getSelectedRow();
         if (row == -1) { JOptionPane.showMessageDialog(this, "Select a client from the table first."); return; }
+        Task2Client client = clientList.get(row);
+        int answer = JOptionPane.showConfirmDialog(this,
+                "Delete " + client.getName() + " (" + client.getClientId() + ")?",
+                "Confirm Client Deletion", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+        if (answer != JOptionPane.YES_OPTION) return;
         try {
-            repository.delete(clientList.get(row).getClientId());
+            repository.delete(client.getClientId());
             clientList.remove(row); refreshTable(); clearForm();
             JOptionPane.showMessageDialog(this, "Client deleted.");
         } catch (IOException exception) {
